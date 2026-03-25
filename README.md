@@ -18,3 +18,4 @@
 - Auto STATUS (escolhe onde vai subir os pontos e sobe automaticamente)
 - Auto farm - Testado apenas no SEA 1 até o momento (lvl 1 ao 700 FUNCIONANDO OK)
   - Detalhes: Nao mata os bosses, permanece na missao antes do boss até ter lvl para a missao depois do boss.
+ 
