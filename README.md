@@ -13,7 +13,7 @@
 ## 📋 How to Use **NEXUS HUB**?
 
 ### Get Your Key
-1. Join our Discord server [CLICK HERE FOR THE INVITE](https://discord.gg/R6kXnrZ3qn)
+1. Join our Discord server [CLICK HERE FOR THE INVITE](https://discord.gg/MNHVeE8Aqc)
 2. Type `/key` in any channel
 3. Receive your key via Direct Message (DM) on Discord! Just it!
 
