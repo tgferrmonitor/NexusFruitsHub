@@ -34,6 +34,7 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/tgferrmonitor/NexusFr
 | **BOUNTY MASTER** | BloxFruits Bounty PvP System | ✅ Active |
 | **UNIVERSAL** | Universal Script (Any Game) | ✅ Active |
 | **ONLY AUTO FARM** | BloxFruits Only Auto-Farm | ✅ Active |
+| **FRUIT GRABBER** | Auto Grab spawne&dropped Fruits  | ✅ Active |
 
 ## 🛠️ Architecture Overview
 
