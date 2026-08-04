@@ -30,7 +30,8 @@ local Svc = {
     Input     = game:GetService("UserInputService"),
     Http      = game:GetService("HttpService"),
     Workspace = game:GetService("Workspace"),
-    CoreGui   = game:GetService("CoreGui")
+    CoreGui   = game:GetService("CoreGui"),
+    StarterGui= game:GetService("StarterGui")
 }
 local VIM; pcall(function() VIM = game:GetService("VirtualInputManager") end)
 local LP = game.Players.LocalPlayer
@@ -83,6 +84,11 @@ local State = {
     statusLbl       = nil,
     statusDot       = nil,
     fpsBoostOn      = false,
+    evomonsCaught   = 0,
+    evomonsFled     = 0,
+    battlesCount    = 0,
+    currentAction   = "Stopped",
+    actionStartTime = os.clock(),
 }
 
 local function HttpRequest(url)
@@ -279,87 +285,41 @@ function Zoom.setEnabled(on, studs)
 end
 
 -- ══════════════════════════════════════════════════════════════
--- FPS BOOST (Agora com Tela Preta e Desativação de Render 3D)
+-- FPS BOOST + CPU ZERO OTIMIZADO (MOBILE UI KILLER)
 -- ══════════════════════════════════════════════════════════════
-local FpsBoost = {
-    originals   = setmetatable({}, { __mode = "k" }),
-    watches     = {},
-    descConn    = nil,
-    lightingConn= nil,
-    globalOrig  = nil,
-    applying    = false,
-    blackScreen = nil,
+local MobCache = {
+    list = {},
+    lastScan = 0,
+    scanInterval = 2.0 
 }
 
-local function fpsStore(obj, prop)
-    if not obj or not prop then return end
-    if not FpsBoost.originals[obj] then FpsBoost.originals[obj] = {} end
-    if FpsBoost.originals[obj][prop] == nil then
-        local ok, val = pcall(function() return obj[prop] end)
-        if ok then FpsBoost.originals[obj][prop] = val end
-    end
-end
-
-local function fpsWatch(obj, prop, value)
-    local guard = false
-    local conn = obj:GetPropertyChangedSignal(prop):Connect(function()
-        if guard or not State.fpsBoostOn then return end
-        pcall(function() if obj[prop] ~= value then guard = true; obj[prop] = value; guard = false end end)
-    end)
-    table.insert(FpsBoost.watches, conn)
-end
-
-local function fpsSet(obj, prop, value, watch)
-    fpsStore(obj, prop)
-    pcall(function() obj[prop] = value end)
-    if watch then fpsWatch(obj, prop, value) end
-end
-
-local function optimizeInstance(v)
-    if not State.fpsBoostOn then return end
-    pcall(function()
-        if v:IsA("MeshPart") then
-            fpsSet(v, "CastShadow", false); fpsSet(v, "Material", Enum.Material.Plastic); fpsSet(v, "Reflectance", 0); fpsSet(v, "TextureID", "")
-        elseif v:IsA("BasePart") then
-            fpsSet(v, "CastShadow", false); fpsSet(v, "Material", Enum.Material.Plastic); fpsSet(v, "Reflectance", 0)
-        elseif v:IsA("SurfaceAppearance") then
-            fpsSet(v, "ColorMap", ""); fpsSet(v, "MetalnessMap", ""); fpsSet(v, "NormalMap", ""); fpsSet(v, "RoughnessMap", "")
-        elseif v:IsA("SpecialMesh") then
-            fpsSet(v, "TextureId", "")
-        elseif v:IsA("Decal") or v:IsA("Texture") then
-            fpsSet(v, "Transparency", 1, true)
-        elseif v:IsA("Beam") or v:IsA("Highlight") or v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") or v:IsA("SpotLight") or v:IsA("PointLight") or v:IsA("SurfaceLight") then
-            fpsSet(v, "Enabled", false, true)
-        elseif v:IsA("SelectionBox") or v:IsA("SelectionSphere") then
-            fpsSet(v, "Visible", false)
-        elseif v:IsA("ParticleEmitter") then
-            fpsSet(v, "Enabled", false, true); fpsSet(v, "Lifetime", NumberRange.new(0))
-        elseif v:IsA("Trail") then
-            fpsSet(v, "Enabled", false, true); fpsSet(v, "Lifetime", 0)
-        elseif v:IsA("Explosion") then
-            fpsSet(v, "BlastPressure", 1); fpsSet(v, "BlastRadius", 1)
-        end
-    end)
-end
-
-local function optimizeLightingEffect(e)
-    if not State.fpsBoostOn then return end
-    if e:IsA("BlurEffect") or e:IsA("SunRaysEffect") or e:IsA("ColorCorrectionEffect") or e:IsA("BloomEffect") or e:IsA("DepthOfFieldEffect") then
-        fpsSet(e, "Enabled", false, true)
-    end
-end
+local FpsBoost = {
+    globalOrig    = nil,
+    applying      = false,
+    blackScreen   = nil,
+    uiAddedConn   = nil,
+    uiConnections = {},
+}
 
 function FpsBoost.apply()
     if State.fpsBoostOn or FpsBoost.applying then return end
     FpsBoost.applying = true
     State.fpsBoostOn = true
 
-    -- 1. Cria a Tela Preta Total no PLAYERGUI para não ficar acima do MainUI
+    local isMobile = Svc.Input.TouchEnabled
+    
+    -- No PC, o setfpscap funciona lindo. No celular, usamos configurações do OS para não bugar.
+    if not isMobile then
+        pcall(function() if setfpscap then setfpscap(5) end end)
+    end
+
+    local pgui = LP:WaitForChild("PlayerGui")
+    
+    -- 1. TELA PRETA PURA + CONTADORES
     if not FpsBoost.blackScreen then
-        local pgui = LP:WaitForChild("PlayerGui")
         local bs = Instance.new("ScreenGui")
         bs.Name = "NexusBlackScreen"
-        bs.DisplayOrder = 99998 -- Fica atrás da nossa UI (que terá 99999) mas acima do jogo
+        bs.DisplayOrder = 99998 
         bs.IgnoreGuiInset = true
         
         local frame = Instance.new("Frame", bs)
@@ -368,23 +328,78 @@ function FpsBoost.apply()
         frame.BorderSizePixel = 0
         
         local lbl = Instance.new("TextLabel", frame)
-        lbl.Size = UDim2.new(1, 0, 1, 0)
+        lbl.Size = UDim2.new(1, 0, 1, -100)
+        lbl.Position = UDim2.new(0, 0, 0, 0)
         lbl.BackgroundTransparency = 1
-        lbl.Text = "NEXUS FPS BOOST ON\n3D RENDERING PAUSED"
+        lbl.Text = "NEXUS FPS BOOST ON\n3D RENDERING PAUSED & CPU EXTREME SAVING"
         lbl.TextColor3 = Color3.fromRGB(30, 30, 30)
         lbl.Font = Enum.Font.GothamBlack
         lbl.TextSize = 20
         lbl.TextXAlignment = Enum.TextXAlignment.Center
         lbl.TextYAlignment = Enum.TextYAlignment.Center
 
-        bs.Parent = pgui -- Colocado intencionalmente no mesmo local que a interface principal
+        local statsLbl = Instance.new("TextLabel", frame)
+        statsLbl.Size = UDim2.new(1, 0, 0, 100)
+        statsLbl.Position = UDim2.new(0, 0, 0.5, 40)
+        statsLbl.AnchorPoint = Vector2.new(0, 0)
+        statsLbl.BackgroundTransparency = 1
+        statsLbl.TextColor3 = Color3.fromRGB(50, 150, 80)
+        statsLbl.Font = Enum.Font.GothamBold
+        statsLbl.TextSize = 14
+        statsLbl.TextXAlignment = Enum.TextXAlignment.Center
+        statsLbl.TextYAlignment = Enum.TextYAlignment.Top
+
+        bs.Parent = pgui 
         FpsBoost.blackScreen = bs
+
+        task.spawn(function()
+            while FpsBoost.blackScreen and FpsBoost.blackScreen.Parent do
+                local elapsed = math.floor(os.clock() - State.actionStartTime)
+                local statusStr = State.currentAction
+                if State.currentAction == "Stopped" or State.currentAction == "Walking" then
+                    statusStr = string.format("%s (seconds: %d)", State.currentAction, elapsed)
+                end
+                
+                statsLbl.Text = string.format("Evomons Caught: %d | Fled: %d\nBattles: %d\nStatus: %s", State.evomonsCaught, State.evomonsFled, State.battlesCount, statusStr)
+                task.wait(1)
+            end
+        end)
     end
 
-    -- 2. Desliga a renderização 3D do jogo (Economia GIGANTE se o executor suportar)
+    -- 2. UI KILLER (Agora desativa TouchGui e CoreGuis também)
+    pcall(function() Svc.StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end)
+    
+    local function handleGui(gui)
+        -- Trata UIs normais e a TouchGui nativa de celular (joystick pesa na CPU)
+        if (gui:IsA("ScreenGui") or gui.Name == "TouchGui") and gui.Name ~= "NexusRoutes" and gui.Name ~= "NexusBlackScreen" then
+            local n = string.lower(gui.Name)
+            local isEssential = string.find(n, "battle") or string.find(n, "fight") or string.find(n, "combat") or string.find(n, "catch")
+
+            if not isEssential then
+                pcall(function() gui.Enabled = false end)
+                local conn = gui:GetPropertyChangedSignal("Enabled"):Connect(function()
+                    if State.fpsBoostOn and gui.Enabled then
+                        pcall(function() gui.Enabled = false end)
+                    end
+                end)
+                table.insert(FpsBoost.uiConnections, conn)
+            end
+        end
+    end
+
+    for _, gui in ipairs(pgui:GetChildren()) do handleGui(gui) end
+    
+    FpsBoost.uiAddedConn = pgui.ChildAdded:Connect(function(child)
+        if State.fpsBoostOn then
+            task.defer(function() handleGui(child) end)
+        end
+    end)
+
+    -- 3. DESLIGA RENDER 3D DO ROBLOX DIRETAMENTE
     pcall(function() Svc.Run:Set3dRenderingEnabled(false) end)
     pcall(function() Svc.Run:set3dRenderingEnabled(false) end)
 
+    -- 4. REMOVE ILUMINAÇÃO GLOBAL PARA SEGURANÇA
     local g = game; local l = g.Lighting; local t = g.Workspace.Terrain
 
     FpsBoost.globalOrig = {
@@ -395,32 +410,17 @@ function FpsBoost.apply()
     pcall(function() FpsBoost.globalOrig.QualityLevel = settings().Rendering.QualityLevel end)
 
     pcall(function() t.WaterWaveSize = 0; t.WaterWaveSpeed = 0; t.WaterReflectance = 0; t.WaterTransparency = 0 end)
-
-    fpsSet(l, "GlobalShadows", false, true); fpsSet(l, "FogEnd", 9e9, true); fpsSet(l, "Brightness", 0, true); fpsSet(l, "EnvironmentDiffuseScale", 0, true); fpsSet(l, "EnvironmentSpecularScale", 0, true)
+    pcall(function()
+        l.GlobalShadows = false
+        l.FogEnd = 9e9
+        l.Brightness = 0
+        l.EnvironmentDiffuseScale = 0
+        l.EnvironmentSpecularScale = 0
+    end)
     pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
 
-    for _, e in pairs(l:GetChildren()) do optimizeLightingEffect(e) end
-    if FpsBoost.lightingConn then FpsBoost.lightingConn:Disconnect() end
-    FpsBoost.lightingConn = l.ChildAdded:Connect(optimizeLightingEffect)
-
-    local BATCH_SIZE = 150
-    local descendants = g.Workspace:GetDescendants()
-    
-    task.spawn(function()
-        for i, v in ipairs(descendants) do
-            if not State.fpsBoostOn then break end
-            optimizeInstance(v)
-            if i % BATCH_SIZE == 0 then task.wait() end
-        end
-
-        if FpsBoost.descConn then FpsBoost.descConn:Disconnect() end
-        FpsBoost.descConn = g.Workspace.DescendantAdded:Connect(function(v)
-            if State.fpsBoostOn then task.defer(function() optimizeInstance(v) end) end
-        end)
-
-        FpsBoost.applying = false
-        UI.notify("FPS Boost ON — Tela apagada e Otimizado", false)
-    end)
+    FpsBoost.applying = false
+    UI.notify("FPS Boost ON — Animações bloqueadas e modo leve", false)
 end
 
 function FpsBoost.restore()
@@ -428,20 +428,30 @@ function FpsBoost.restore()
     State.fpsBoostOn = false
     FpsBoost.applying = false
 
-    -- 1. Remove a tela preta
+    local isMobile = Svc.Input.TouchEnabled
+    if not isMobile then
+        pcall(function() if setfpscap then setfpscap(60) end end)
+    end
+
+    pcall(function() Svc.StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end)
+
+    if FpsBoost.uiAddedConn then FpsBoost.uiAddedConn:Disconnect(); FpsBoost.uiAddedConn = nil end
+    for _, conn in ipairs(FpsBoost.uiConnections) do pcall(function() conn:Disconnect() end) end
+    FpsBoost.uiConnections = {}
+    
+    local pgui = LP:WaitForChild("PlayerGui")
+    pcall(function() 
+        local touchGui = pgui:FindFirstChild("TouchGui")
+        if touchGui then touchGui.Enabled = true end
+    end)
+
     if FpsBoost.blackScreen then
         FpsBoost.blackScreen:Destroy()
         FpsBoost.blackScreen = nil
     end
 
-    -- 2. Restaura a renderização 3D
     pcall(function() Svc.Run:Set3dRenderingEnabled(true) end)
     pcall(function() Svc.Run:set3dRenderingEnabled(true) end)
-
-    if FpsBoost.descConn then FpsBoost.descConn:Disconnect(); FpsBoost.descConn = nil end
-    if FpsBoost.lightingConn then FpsBoost.lightingConn:Disconnect(); FpsBoost.lightingConn = nil end
-    for _, conn in ipairs(FpsBoost.watches) do pcall(function() conn:Disconnect() end) end
-    FpsBoost.watches = {}
 
     local go = FpsBoost.globalOrig
     if go then
@@ -452,14 +462,7 @@ function FpsBoost.restore()
         FpsBoost.globalOrig = nil
     end
 
-    local BATCH = 200; local count = 0
-    for obj, props in pairs(FpsBoost.originals) do
-        if obj and obj.Parent then for prop, val in pairs(props) do pcall(function() obj[prop] = val end) end end
-        count = count + 1; if count % BATCH == 0 then task.wait() end
-    end
-    FpsBoost.originals = setmetatable({}, { __mode = "k" })
-
-    UI.notify("FPS Boost OFF — Configurações restauradas", false)
+    UI.notify("FPS Boost OFF — Renderização restaurada", false)
 end
 
 function FpsBoost.toggle()
@@ -476,13 +479,15 @@ function Battle.detect()
             if obj:IsA("ScreenGui") and obj.Enabled and (name:find("Battle") or name:find("Fight") or name:find("Combat")) then return true end
         end
     end
+    
     local char = LP.Character; local hum = char and char:FindFirstChildOfClass("Humanoid")
     if hum and hum.WalkSpeed < 1 then
         local hrp = char:FindFirstChild("HumanoidRootPart")
         if hrp then
-            for _, obj in ipairs(Svc.Workspace:GetDescendants()) do
-                if obj:IsA("Model") and obj ~= char then
-                    local eHum = obj:FindFirstChildOfClass("Humanoid"); local eHrp = obj:FindFirstChild("HumanoidRootPart")
+            for _, obj in ipairs(MobCache.list) do
+                if obj and obj.Parent and obj ~= char then
+                    local eHum = obj:FindFirstChildOfClass("Humanoid")
+                    local eHrp = obj:FindFirstChild("HumanoidRootPart")
                     if eHum and eHrp and (hrp.Position - eHrp.Position).Magnitude < 50 then return true end
                 end
             end
@@ -545,18 +550,28 @@ function Battle.stopCatchLoop() if State._catchTask then task.cancel(State._catc
 
 function Battle._updateStatus()
     if not State.statusLbl then return end
+    local oldAction = State.currentAction
+    
     if State.inCatch then
         State.statusLbl.Text = "CATCHING"; State.statusLbl.TextColor3 = C.orange
+        State.currentAction = "Catch screen"
         if State.statusDot then State.statusDot.BackgroundColor3 = C.orange end
     elseif State.inBattle then 
         State.statusLbl.Text = "BATTLE"; State.statusLbl.TextColor3 = C.orange
+        State.currentAction = "Battle screen"
         if State.statusDot then State.statusDot.BackgroundColor3 = C.orange end
     elseif State.huntOn then 
         State.statusLbl.Text = "ACTIVE"; State.statusLbl.TextColor3 = C.green
+        State.currentAction = "Walking"
         if State.statusDot then State.statusDot.BackgroundColor3 = C.green end
     else 
         State.statusLbl.Text = "STOPPED"; State.statusLbl.TextColor3 = C.sub
+        State.currentAction = "Stopped"
         if State.statusDot then State.statusDot.BackgroundColor3 = C.sub end 
+    end
+
+    if oldAction ~= State.currentAction then
+        State.actionStartTime = os.clock()
     end
 end
 
@@ -568,7 +583,14 @@ function Battle.startMonitor()
             local nowCatch = Battle.isCatchScreen()
             
             if nowCatch and not State.inCatch then 
-                State.inCatch = true; Battle.startCatchLoop(); Battle._updateStatus()
+                State.inCatch = true
+                if State.catchKey == "E" then
+                    State.evomonsCaught = State.evomonsCaught + 1
+                elseif State.catchKey == "C" then
+                    State.evomonsFled = State.evomonsFled + 1
+                end
+                
+                Battle.startCatchLoop(); Battle._updateStatus()
             elseif not nowCatch and State.inCatch then 
                 State.inCatch = false; Battle.stopCatchLoop(); Battle._updateStatus()
             end
@@ -580,7 +602,9 @@ function Battle.startMonitor()
             
             local nowInBattle = Battle.detect()
             if nowInBattle and not State.inBattle then
-                State.inBattle = true; Input.releaseAll(); Battle.disableAutoUI(); Battle.startSkillLoop(); Battle._updateStatus()
+                State.inBattle = true
+                State.battlesCount = State.battlesCount + 1
+                Input.releaseAll(); Battle.disableAutoUI(); Battle.startSkillLoop(); Battle._updateStatus()
             elseif not nowInBattle and State.inBattle then
                 State.inBattle = false; Battle.stopSkillLoop(); Input.releaseAll(); task.wait(0.8); Battle._updateStatus()
             end
@@ -639,21 +663,50 @@ function MobHunt.isWildMob(model)
     for _, pat in ipairs(WILD_NAME_PATTERNS) do if model.Name:match(pat) then return true end end
     return true
 end
+
 function MobHunt.scan(radius)
     local char = LP.Character; local hrp = char and char:FindFirstChild("HumanoidRootPart"); if not hrp then return {} end
+    local now = os.clock()
     local results = {}
+    
+    if now - MobCache.lastScan < MobCache.scanInterval and #MobCache.list > 0 then
+        for _, obj in ipairs(MobCache.list) do
+            if obj and obj.Parent then
+                local mHrp = obj:FindFirstChild("HumanoidRootPart")
+                local mHum = obj:FindFirstChildOfClass("Humanoid")
+                if mHrp and mHum and mHum.Health > 0 then
+                    local dist = (hrp.Position - mHrp.Position).Magnitude
+                    if dist <= radius then
+                        table.insert(results, { model = obj, name = obj.Name:match("%.(.+)$") or obj.Name, distance = dist })
+                    end
+                end
+            end
+        end
+        if #results > 0 then
+            table.sort(results, function(a, b) return a.distance < b.distance end)
+            return results
+        end
+    end
+    
+    MobCache.lastScan = now
+    MobCache.list = {}
+    
     for _, obj in ipairs(Svc.Workspace:GetDescendants()) do
         if obj:IsA("Model") and MobHunt.isWildMob(obj) then
+            table.insert(MobCache.list, obj)
             local mHrp = obj:FindFirstChild("HumanoidRootPart")
             if mHrp then
                 local dist = (hrp.Position - mHrp.Position).Magnitude
-                if dist <= radius then table.insert(results, { model = obj, name = obj.Name:match("%.(.+)$") or obj.Name, distance = dist }) end
+                if dist <= radius then 
+                    table.insert(results, { model = obj, name = obj.Name:match("%.(.+)$") or obj.Name, distance = dist }) 
+                end
             end
         end
     end
     table.sort(results, function(a, b) return a.distance < b.distance end)
     return results
 end
+
 function MobHunt.getClosestInRange(radius) local list = MobHunt.scan(radius or State.huntRange); if #list > 0 then return list[1] end; return nil end
 
 function MobHunt.start()
@@ -776,7 +829,7 @@ end
 local function BuildUI()
     local pgui = LP:WaitForChild("PlayerGui"); if pgui:FindFirstChild("NexusRoutes") then pgui.NexusRoutes:Destroy() end
     local sc = Instance.new("ScreenGui", pgui); sc.Name = "NexusRoutes"; sc.ResetOnSpawn = false; 
-    sc.DisplayOrder = 99999 -- PRIORIDADE MAXIMA PARA APARECER ACIMA DA TELA PRETA
+    sc.DisplayOrder = 99999 
     sc.ZIndexBehavior = Enum.ZIndexBehavior.Sibling; sc.IgnoreGuiInset = true
     mainScreenGui = sc
     
