@@ -124,7 +124,7 @@ local function sendHeartbeat(discord_id)
         pcall(function() if LP:FindFirstChild("Data") and LP.Data:FindFirstChild("Level") then level = tostring(LP.Data.Level.Value) end end)
         local payload = { roblox_id = tostring(LP.UserId), roblox_name = tostring(LP.Name), level = level, using_script = SCRIPT_NAME, discord_id = discord_id or "" }
         local ok, body = pcall(HttpService.JSONEncode, HttpService, payload)
-        if not ok or not body then return end
+        if not ok or body == nil then return end
         pcall(function()
             local req = (syn and syn.request) or http_request or request
             if req then req({ Url = API_BASE .. "/api/heartbeat", Method = "POST", Body = body, Headers = {["Content-Type"] = "application/json"} })
@@ -200,7 +200,6 @@ function UI.circleBtn(props, p)
     return b
 end
 
--- NOTIFICATION SYSTEM
 function UI.notify(msg, isError)
     if not mainScreenGui then return end
     local notif = Instance.new("Frame", mainScreenGui)
@@ -211,7 +210,7 @@ function UI.notify(msg, isError)
     notif.ZIndex = 50
     UI.corner(8, notif)
     UI.stroke(isError and C.red or C.accent, 1.5, notif)
-    UI.gradient(notif, isError and Color3.fromRGB(40, 15, 15) or Color3.fromRGB(15, 25, 40), C.dark1, 90)
+    UI.gradient(notif, isError and Color3.fromRGB(40, 15, 15) or Color3.fromRGB(15, 25, 40), 90)
 
     local icon = UI.label({ Text = isError and "⚠️" or "✅", Font = Enum.Font.GothamBold, TextSize = 16, TextColor3 = C.white, Size = UDim2.new(0, 30, 1, 0), Position = UDim2.new(0, 10, 0, 0), AlignX = Enum.TextXAlignment.Center }, notif)
     local lbl = UI.label({ Text = msg, Font = Enum.Font.GothamBold, TextSize = 11, TextColor3 = isError and C.orange or C.text, Size = UDim2.new(1, -50, 1, 0), Position = UDim2.new(0, 45, 0, 0), Wrap = true }, notif)
@@ -280,27 +279,24 @@ function Zoom.setEnabled(on, studs)
 end
 
 -- ══════════════════════════════════════════════════════════════
--- FPS BOOST  (integrado + restore completo + fix NumberRange)
+-- FPS BOOST (Agora com Tela Preta e Desativação de Render 3D)
 -- ══════════════════════════════════════════════════════════════
 local FpsBoost = {
-    originals   = setmetatable({}, { __mode = "k" }), -- weak keys
+    originals   = setmetatable({}, { __mode = "k" }),
     watches     = {},
     descConn    = nil,
     lightingConn= nil,
     globalOrig  = nil,
     applying    = false,
+    blackScreen = nil,
 }
 
 local function fpsStore(obj, prop)
     if not obj or not prop then return end
-    if not FpsBoost.originals[obj] then
-        FpsBoost.originals[obj] = {}
-    end
+    if not FpsBoost.originals[obj] then FpsBoost.originals[obj] = {} end
     if FpsBoost.originals[obj][prop] == nil then
         local ok, val = pcall(function() return obj[prop] end)
-        if ok then
-            FpsBoost.originals[obj][prop] = val
-        end
+        if ok then FpsBoost.originals[obj][prop] = val end
     end
 end
 
@@ -308,13 +304,7 @@ local function fpsWatch(obj, prop, value)
     local guard = false
     local conn = obj:GetPropertyChangedSignal(prop):Connect(function()
         if guard or not State.fpsBoostOn then return end
-        pcall(function()
-            if obj[prop] ~= value then
-                guard = true
-                obj[prop] = value
-                guard = false
-            end
-        end)
+        pcall(function() if obj[prop] ~= value then guard = true; obj[prop] = value; guard = false end end)
     end)
     table.insert(FpsBoost.watches, conn)
 end
@@ -322,74 +312,39 @@ end
 local function fpsSet(obj, prop, value, watch)
     fpsStore(obj, prop)
     pcall(function() obj[prop] = value end)
-    if watch then
-        fpsWatch(obj, prop, value)
-    end
+    if watch then fpsWatch(obj, prop, value) end
 end
 
 local function optimizeInstance(v)
     if not State.fpsBoostOn then return end
     pcall(function()
         if v:IsA("MeshPart") then
-            fpsSet(v, "CastShadow", false)
-            fpsSet(v, "Material", Enum.Material.Plastic)
-            fpsSet(v, "Reflectance", 0)
-            fpsSet(v, "TextureID", "")
-
+            fpsSet(v, "CastShadow", false); fpsSet(v, "Material", Enum.Material.Plastic); fpsSet(v, "Reflectance", 0); fpsSet(v, "TextureID", "")
         elseif v:IsA("BasePart") then
-            fpsSet(v, "CastShadow", false)
-            fpsSet(v, "Material", Enum.Material.Plastic)
-            fpsSet(v, "Reflectance", 0)
-
+            fpsSet(v, "CastShadow", false); fpsSet(v, "Material", Enum.Material.Plastic); fpsSet(v, "Reflectance", 0)
         elseif v:IsA("SurfaceAppearance") then
-            fpsSet(v, "ColorMap", "")
-            fpsSet(v, "MetalnessMap", "")
-            fpsSet(v, "NormalMap", "")
-            fpsSet(v, "RoughnessMap", "")
-
+            fpsSet(v, "ColorMap", ""); fpsSet(v, "MetalnessMap", ""); fpsSet(v, "NormalMap", ""); fpsSet(v, "RoughnessMap", "")
         elseif v:IsA("SpecialMesh") then
             fpsSet(v, "TextureId", "")
-
         elseif v:IsA("Decal") or v:IsA("Texture") then
             fpsSet(v, "Transparency", 1, true)
-
-        elseif v:IsA("Beam") then
+        elseif v:IsA("Beam") or v:IsA("Highlight") or v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") or v:IsA("SpotLight") or v:IsA("PointLight") or v:IsA("SurfaceLight") then
             fpsSet(v, "Enabled", false, true)
-
-        elseif v:IsA("Highlight") then
-            fpsSet(v, "Enabled", false, true)
-
         elseif v:IsA("SelectionBox") or v:IsA("SelectionSphere") then
             fpsSet(v, "Visible", false)
-
         elseif v:IsA("ParticleEmitter") then
-            -- Lifetime = NumberRange
-            fpsSet(v, "Enabled", false, true)
-            fpsSet(v, "Lifetime", NumberRange.new(0))
-
+            fpsSet(v, "Enabled", false, true); fpsSet(v, "Lifetime", NumberRange.new(0))
         elseif v:IsA("Trail") then
-            -- Lifetime = number (fix do warning)
-            fpsSet(v, "Enabled", false, true)
-            fpsSet(v, "Lifetime", 0)
-
+            fpsSet(v, "Enabled", false, true); fpsSet(v, "Lifetime", 0)
         elseif v:IsA("Explosion") then
-            fpsSet(v, "BlastPressure", 1)
-            fpsSet(v, "BlastRadius", 1)
-
-        elseif v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") then
-            fpsSet(v, "Enabled", false, true)
-
-        elseif v:IsA("SpotLight") or v:IsA("PointLight") or v:IsA("SurfaceLight") then
-            fpsSet(v, "Enabled", false, true)
+            fpsSet(v, "BlastPressure", 1); fpsSet(v, "BlastRadius", 1)
         end
     end)
 end
 
 local function optimizeLightingEffect(e)
     if not State.fpsBoostOn then return end
-    if e:IsA("BlurEffect") or e:IsA("SunRaysEffect")
-    or e:IsA("ColorCorrectionEffect") or e:IsA("BloomEffect")
-    or e:IsA("DepthOfFieldEffect") then
+    if e:IsA("BlurEffect") or e:IsA("SunRaysEffect") or e:IsA("ColorCorrectionEffect") or e:IsA("BloomEffect") or e:IsA("DepthOfFieldEffect") then
         fpsSet(e, "Enabled", false, true)
     end
 end
@@ -399,79 +354,72 @@ function FpsBoost.apply()
     FpsBoost.applying = true
     State.fpsBoostOn = true
 
-    local g = game
-    local l = g.Lighting
-    local t = g.Workspace.Terrain
+    -- 1. Cria a Tela Preta Total no PLAYERGUI para não ficar acima do MainUI
+    if not FpsBoost.blackScreen then
+        local pgui = LP:WaitForChild("PlayerGui")
+        local bs = Instance.new("ScreenGui")
+        bs.Name = "NexusBlackScreen"
+        bs.DisplayOrder = 99998 -- Fica atrás da nossa UI (que terá 99999) mas acima do jogo
+        bs.IgnoreGuiInset = true
+        
+        local frame = Instance.new("Frame", bs)
+        frame.Size = UDim2.new(1, 0, 1, 0)
+        frame.BackgroundColor3 = Color3.new(0, 0, 0)
+        frame.BorderSizePixel = 0
+        
+        local lbl = Instance.new("TextLabel", frame)
+        lbl.Size = UDim2.new(1, 0, 1, 0)
+        lbl.BackgroundTransparency = 1
+        lbl.Text = "NEXUS FPS BOOST ON\n3D RENDERING PAUSED"
+        lbl.TextColor3 = Color3.fromRGB(30, 30, 30)
+        lbl.Font = Enum.Font.GothamBlack
+        lbl.TextSize = 20
+        lbl.TextXAlignment = Enum.TextXAlignment.Center
+        lbl.TextYAlignment = Enum.TextYAlignment.Center
 
-    -- Snapshot global settings
-    FpsBoost.globalOrig = {
-        WaterWaveSize       = t.WaterWaveSize,
-        WaterWaveSpeed      = t.WaterWaveSpeed,
-        WaterReflectance    = t.WaterReflectance,
-        WaterTransparency   = t.WaterTransparency,
-        GlobalShadows       = l.GlobalShadows,
-        FogEnd              = l.FogEnd,
-        Brightness          = l.Brightness,
-        EnvironmentDiffuseScale  = l.EnvironmentDiffuseScale,
-        EnvironmentSpecularScale = l.EnvironmentSpecularScale,
-        QualityLevel        = nil,
-    }
-    pcall(function()
-        FpsBoost.globalOrig.QualityLevel = settings().Rendering.QualityLevel
-    end)
-
-    -- Terrain
-    pcall(function()
-        t.WaterWaveSize     = 0
-        t.WaterWaveSpeed    = 0
-        t.WaterReflectance  = 0
-        t.WaterTransparency = 0
-    end)
-
-    -- Lighting
-    fpsSet(l, "GlobalShadows", false, true)
-    fpsSet(l, "FogEnd", 9e9, true)
-    fpsSet(l, "Brightness", 0, true)
-    fpsSet(l, "EnvironmentDiffuseScale", 0, true)
-    fpsSet(l, "EnvironmentSpecularScale", 0, true)
-
-    pcall(function()
-        settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
-    end)
-
-    -- Existing lighting effects
-    for _, e in pairs(l:GetChildren()) do
-        optimizeLightingEffect(e)
+        bs.Parent = pgui -- Colocado intencionalmente no mesmo local que a interface principal
+        FpsBoost.blackScreen = bs
     end
+
+    -- 2. Desliga a renderização 3D do jogo (Economia GIGANTE se o executor suportar)
+    pcall(function() Svc.Run:Set3dRenderingEnabled(false) end)
+    pcall(function() Svc.Run:set3dRenderingEnabled(false) end)
+
+    local g = game; local l = g.Lighting; local t = g.Workspace.Terrain
+
+    FpsBoost.globalOrig = {
+        WaterWaveSize = t.WaterWaveSize, WaterWaveSpeed = t.WaterWaveSpeed, WaterReflectance = t.WaterReflectance, WaterTransparency = t.WaterTransparency,
+        GlobalShadows = l.GlobalShadows, FogEnd = l.FogEnd, Brightness = l.Brightness, EnvironmentDiffuseScale = l.EnvironmentDiffuseScale, EnvironmentSpecularScale = l.EnvironmentSpecularScale,
+        QualityLevel = nil,
+    }
+    pcall(function() FpsBoost.globalOrig.QualityLevel = settings().Rendering.QualityLevel end)
+
+    pcall(function() t.WaterWaveSize = 0; t.WaterWaveSpeed = 0; t.WaterReflectance = 0; t.WaterTransparency = 0 end)
+
+    fpsSet(l, "GlobalShadows", false, true); fpsSet(l, "FogEnd", 9e9, true); fpsSet(l, "Brightness", 0, true); fpsSet(l, "EnvironmentDiffuseScale", 0, true); fpsSet(l, "EnvironmentSpecularScale", 0, true)
+    pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
+
+    for _, e in pairs(l:GetChildren()) do optimizeLightingEffect(e) end
     if FpsBoost.lightingConn then FpsBoost.lightingConn:Disconnect() end
     FpsBoost.lightingConn = l.ChildAdded:Connect(optimizeLightingEffect)
 
-    -- Batch process workspace
     local BATCH_SIZE = 150
     local descendants = g.Workspace:GetDescendants()
-    local total = #descendants
-
+    
     task.spawn(function()
         for i, v in ipairs(descendants) do
             if not State.fpsBoostOn then break end
             optimizeInstance(v)
-            if i % BATCH_SIZE == 0 then
-                task.wait()
-            end
+            if i % BATCH_SIZE == 0 then task.wait() end
         end
 
-        -- Permanent listener for new objects
         if FpsBoost.descConn then FpsBoost.descConn:Disconnect() end
         FpsBoost.descConn = g.Workspace.DescendantAdded:Connect(function(v)
-            if State.fpsBoostOn then
-                task.defer(function()
-                    optimizeInstance(v)
-                end)
-            end
+            if State.fpsBoostOn then task.defer(function() optimizeInstance(v) end) end
         end)
 
         FpsBoost.applying = false
-        UI.notify("FPS Boost ON — otimizado", false)
+        UI.notify("FPS Boost ON — Tela apagada e Otimizado", false)
     end)
 end
 
@@ -480,71 +428,42 @@ function FpsBoost.restore()
     State.fpsBoostOn = false
     FpsBoost.applying = false
 
-    -- Disconnect listeners
-    if FpsBoost.descConn then
-        FpsBoost.descConn:Disconnect()
-        FpsBoost.descConn = nil
+    -- 1. Remove a tela preta
+    if FpsBoost.blackScreen then
+        FpsBoost.blackScreen:Destroy()
+        FpsBoost.blackScreen = nil
     end
-    if FpsBoost.lightingConn then
-        FpsBoost.lightingConn:Disconnect()
-        FpsBoost.lightingConn = nil
-    end
-    for _, conn in ipairs(FpsBoost.watches) do
-        pcall(function() conn:Disconnect() end)
-    end
+
+    -- 2. Restaura a renderização 3D
+    pcall(function() Svc.Run:Set3dRenderingEnabled(true) end)
+    pcall(function() Svc.Run:set3dRenderingEnabled(true) end)
+
+    if FpsBoost.descConn then FpsBoost.descConn:Disconnect(); FpsBoost.descConn = nil end
+    if FpsBoost.lightingConn then FpsBoost.lightingConn:Disconnect(); FpsBoost.lightingConn = nil end
+    for _, conn in ipairs(FpsBoost.watches) do pcall(function() conn:Disconnect() end) end
     FpsBoost.watches = {}
 
-    -- Restore globals
     local go = FpsBoost.globalOrig
     if go then
-        local t = game.Workspace.Terrain
-        local l = game.Lighting
-        pcall(function()
-            t.WaterWaveSize     = go.WaterWaveSize
-            t.WaterWaveSpeed    = go.WaterWaveSpeed
-            t.WaterReflectance  = go.WaterReflectance
-            t.WaterTransparency = go.WaterTransparency
-        end)
-        pcall(function()
-            l.GlobalShadows            = go.GlobalShadows
-            l.FogEnd                   = go.FogEnd
-            l.Brightness               = go.Brightness
-            l.EnvironmentDiffuseScale  = go.EnvironmentDiffuseScale
-            l.EnvironmentSpecularScale = go.EnvironmentSpecularScale
-        end)
-        if go.QualityLevel ~= nil then
-            pcall(function()
-                settings().Rendering.QualityLevel = go.QualityLevel
-            end)
-        end
+        local t = game.Workspace.Terrain; local l = game.Lighting
+        pcall(function() t.WaterWaveSize = go.WaterWaveSize; t.WaterWaveSpeed = go.WaterWaveSpeed; t.WaterReflectance = go.WaterReflectance; t.WaterTransparency = go.WaterTransparency end)
+        pcall(function() l.GlobalShadows = go.GlobalShadows; l.FogEnd = go.FogEnd; l.Brightness = go.Brightness; l.EnvironmentDiffuseScale = go.EnvironmentDiffuseScale; l.EnvironmentSpecularScale = go.EnvironmentSpecularScale end)
+        if go.QualityLevel ~= nil then pcall(function() settings().Rendering.QualityLevel = go.QualityLevel end) end
         FpsBoost.globalOrig = nil
     end
 
-    -- Restore per-instance properties
-    local BATCH = 200
-    local count = 0
+    local BATCH = 200; local count = 0
     for obj, props in pairs(FpsBoost.originals) do
-        if obj and obj.Parent then
-            for prop, val in pairs(props) do
-                pcall(function() obj[prop] = val end)
-            end
-        end
-        count = count + 1
-        if count % BATCH == 0 then
-            task.wait()
-        end
+        if obj and obj.Parent then for prop, val in pairs(props) do pcall(function() obj[prop] = val end) end end
+        count = count + 1; if count % BATCH == 0 then task.wait() end
     end
     FpsBoost.originals = setmetatable({}, { __mode = "k" })
 
-    UI.notify("FPS Boost OFF — configs restauradas", false)
+    UI.notify("FPS Boost OFF — Configurações restauradas", false)
 end
 
 function FpsBoost.toggle()
-    if State.fpsBoostOn then
-        FpsBoost.restore()
-    else
-        FpsBoost.apply()
-    end
+    if State.fpsBoostOn then FpsBoost.restore() else FpsBoost.apply() end
 end
 
 local Battle = {}
@@ -649,35 +568,21 @@ function Battle.startMonitor()
             local nowCatch = Battle.isCatchScreen()
             
             if nowCatch and not State.inCatch then 
-                State.inCatch = true
-                Battle.startCatchLoop()
-                Battle._updateStatus()
+                State.inCatch = true; Battle.startCatchLoop(); Battle._updateStatus()
             elseif not nowCatch and State.inCatch then 
-                State.inCatch = false
-                Battle.stopCatchLoop()
-                Battle._updateStatus()
+                State.inCatch = false; Battle.stopCatchLoop(); Battle._updateStatus()
             end
             
             if not State.battleDetection then
-                if State.inBattle then 
-                    State.inBattle = false; Battle.stopSkillLoop(); Input.releaseAll(); Battle._updateStatus() 
-                end
+                if State.inBattle then State.inBattle = false; Battle.stopSkillLoop(); Input.releaseAll(); Battle._updateStatus() end
                 continue
             end
             
             local nowInBattle = Battle.detect()
             if nowInBattle and not State.inBattle then
-                State.inBattle = true
-                Input.releaseAll()
-                Battle.disableAutoUI()
-                Battle.startSkillLoop()
-                Battle._updateStatus()
+                State.inBattle = true; Input.releaseAll(); Battle.disableAutoUI(); Battle.startSkillLoop(); Battle._updateStatus()
             elseif not nowInBattle and State.inBattle then
-                State.inBattle = false
-                Battle.stopSkillLoop()
-                Input.releaseAll()
-                task.wait(0.8)
-                Battle._updateStatus()
+                State.inBattle = false; Battle.stopSkillLoop(); Input.releaseAll(); task.wait(0.8); Battle._updateStatus()
             end
         end
     end)
@@ -752,13 +657,10 @@ end
 function MobHunt.getClosestInRange(radius) local list = MobHunt.scan(radius or State.huntRange); if #list > 0 then return list[1] end; return nil end
 
 function MobHunt.start()
-    MobHunt.stop()
-    State.huntOn = true
-    
+    MobHunt.stop(); State.huntOn = true
     State._huntTask = task.spawn(function()
         local function runHuntLoop()
             local idleTimer, checkInterval, lastCheckTime, lastPos = 0, 2, os.clock(), Vector3.new(0,0,0)
-            
             while State.huntOn do
                 while (State.inBattle or State.inCatch) and State.battleDetection and State.huntOn do task.wait(0.5) end
                 if not State.huntOn then break end
@@ -771,49 +673,36 @@ function MobHunt.start()
                         if hrp then
                             local targetPos = hrp.Position + Vector3.new(math.random(-10,10), 0, math.random(-10,10)).Unit * 30
                             local startTime = os.clock()
-                            while State.huntOn and (os.clock() - startTime) < 5 do 
-                                if Move.towards(targetPos) then break end
-                                task.wait(0.1) 
-                            end
+                            while State.huntOn and (os.clock() - startTime) < 5 do if Move.towards(targetPos) then break end; task.wait(0.1) end
                         end
                         Input.releaseAll(); task.wait(0.5); continue
                     end
                 end
                 
-                local target = closest.model
-                State.currentTarget = target
+                local target = closest.model; State.currentTarget = target
                 local stuckCount, lastDist, jumpAttempts, arrived = 0, math.huge, 0, false
                 local hrpStart = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-                lastPos = hrpStart and hrpStart.Position or Vector3.new(0,0,0)
-                lastCheckTime = os.clock()
-                idleTimer = 0
+                lastPos = hrpStart and hrpStart.Position or Vector3.new(0,0,0); lastCheckTime = os.clock(); idleTimer = 0
                 
                 while State.huntOn and not arrived do
                     task.wait(0.05)
-                    
                     if (State.inBattle or State.inCatch) and State.battleDetection then 
                         Input.releaseAll()
                         while (State.inBattle or State.inCatch) and State.battleDetection and State.huntOn do task.wait(0.5) end
                         if not State.huntOn then break end
-                        task.wait(0.4)
-                        lastDist, stuckCount, jumpAttempts, idleTimer = math.huge, 0, 0, 0
+                        task.wait(0.4); lastDist, stuckCount, jumpAttempts, idleTimer = math.huge, 0, 0, 0
                         if not target or not target.Parent then arrived = true; break end 
                     end
                     
                     if not target or not target.Parent then arrived = true; break end
-                    local mHrp = target:FindFirstChild("HumanoidRootPart")
-                    if not mHrp then arrived = true; break end
-                    
-                    local char = LP.Character
-                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                    if not hrp then break end 
+                    local mHrp = target:FindFirstChild("HumanoidRootPart"); if not mHrp then arrived = true; break end
+                    local char = LP.Character; local hrp = char and char:FindFirstChild("HumanoidRootPart"); if not hrp then break end 
                     
                     local dist = (hrp.Position - mHrp.Position).Magnitude
                     if dist < 3 then
                         arrived = true; Input.releaseAll(); idleTimer = 0
                         while State.huntOn and target and target.Parent and not (State.inBattle or State.inCatch) do
-                            task.wait(0.3)
-                            if not target.Parent or (hrp.Position - mHrp.Position).Magnitude > 5 then arrived = false; break end
+                            task.wait(0.3); if not target.Parent or (hrp.Position - mHrp.Position).Magnitude > 5 then arrived = false; break end
                         end
                         if not arrived then continue end
                         break
@@ -822,9 +711,7 @@ function MobHunt.start()
                     if dist > State.maxHuntDistance then 
                         local newClosest = MobHunt.getClosestInRange()
                         if newClosest and newClosest.model ~= target and newClosest.distance < dist then 
-                            target = newClosest.model; State.currentTarget = target
-                            lastDist, stuckCount, jumpAttempts, idleTimer = math.huge, 0, 0, 0
-                            continue 
+                            target = newClosest.model; State.currentTarget = target; lastDist, stuckCount, jumpAttempts, idleTimer = math.huge, 0, 0, 0; continue 
                         end 
                     end
                     
@@ -838,12 +725,8 @@ function MobHunt.start()
                         if jumpAttempts >= 5 then 
                             local newClosest = MobHunt.getClosestInRange()
                             if newClosest and newClosest.model ~= target and newClosest.distance < dist then 
-                                target = newClosest.model; State.currentTarget = target
-                                lastDist, stuckCount, jumpAttempts, idleTimer = math.huge, 0, 0, 0
-                                continue 
-                            else 
-                                arrived = true; break 
-                            end 
+                                target = newClosest.model; State.currentTarget = target; lastDist, stuckCount, jumpAttempts, idleTimer = math.huge, 0, 0, 0; continue 
+                            else arrived = true; break end 
                         end
                     end
                     
@@ -862,13 +745,11 @@ function MobHunt.start()
                             task.wait(0.5); Input.releaseAll(); idleTimer = 0
                             local newTarget = MobHunt.getClosestInRange()
                             if newTarget and newTarget.model ~= target then 
-                                target = newTarget.model; State.currentTarget = target
-                                lastDist, stuckCount, jumpAttempts = math.huge, 0, 0 
+                                target = newTarget.model; State.currentTarget = target; lastDist, stuckCount, jumpAttempts = math.huge, 0, 0 
                             end
                         end
                     end
                 end
-                
                 Input.releaseAll()
                 if not target or not target.Parent then task.wait(0.3) end
             end
@@ -876,11 +757,7 @@ function MobHunt.start()
 
         while State.huntOn do
             local ok, err = pcall(runHuntLoop)
-            if not ok then
-                warn("[MobHunt] Inner loop error prevented stop UI bug: ", tostring(err))
-                Input.releaseAll()
-                task.wait(1)
-            end
+            if not ok then warn("[MobHunt] Inner loop error: ", tostring(err)); Input.releaseAll(); task.wait(1) end
         end
     end)
 end
@@ -898,53 +775,46 @@ end
 
 local function BuildUI()
     local pgui = LP:WaitForChild("PlayerGui"); if pgui:FindFirstChild("NexusRoutes") then pgui.NexusRoutes:Destroy() end
-    local sc = Instance.new("ScreenGui", pgui); sc.Name = "NexusRoutes"; sc.ResetOnSpawn = false; sc.DisplayOrder = 10; sc.ZIndexBehavior = Enum.ZIndexBehavior.Sibling; sc.IgnoreGuiInset = true
+    local sc = Instance.new("ScreenGui", pgui); sc.Name = "NexusRoutes"; sc.ResetOnSpawn = false; 
+    sc.DisplayOrder = 99999 -- PRIORIDADE MAXIMA PARA APARECER ACIMA DA TELA PRETA
+    sc.ZIndexBehavior = Enum.ZIndexBehavior.Sibling; sc.IgnoreGuiInset = true
     mainScreenGui = sc
     
     local isTouch = Svc.Input.TouchEnabled
     
-    -- Main Window
     local win = Instance.new("Frame", sc); win.Size = UDim2.new(0, 520, 0, 0); win.AutomaticSize = Enum.AutomaticSize.Y; win.AnchorPoint = Vector2.new(0.5, 0.5); win.Position = isTouch and UDim2.new(0.5, 0, 0.3, 0) or UDim2.new(0.5, 0, 0.5, 0); win.BackgroundColor3 = C.bg; win.BorderSizePixel = 0; UI.corner(16, win); UI.gradient(win, Color3.fromRGB(12, 18, 26), Color3.fromRGB(18, 24, 36), 80)
     local winStroke = UI.stroke(C.accent, 1.5, win); winStroke.Transparency = 0.45; UI.pulse({ winStroke }, 0.3, 0.65, 1.6, "Transparency"); win.BackgroundTransparency = 1; UI.tween(win, 0.25, { BackgroundTransparency = 0 })
     if not isTouch then local scale = Instance.new("UIScale", win); scale.Scale = 1.05 end
 
     UI.listLayout(win, Enum.FillDirection.Vertical, 8, nil, Enum.HorizontalAlignment.Center); UI.pad(10,10,10,10, win)
 
-    -- Top bar
     local topBar = Instance.new("Frame", win); topBar.Size = UDim2.new(1,0,0,24); topBar.BackgroundTransparency = 1; topBar.LayoutOrder = 0; makeDraggable(topBar, win)
     local titleLbl = UI.label({ Text = "NEXUS EVO DISTANCE", Font = Enum.Font.GothamBlack, TextSize = 11, TextColor3 = C.accent, Size = UDim2.new(1,0,1,0), AlignX = Enum.TextXAlignment.Center }, topBar)
     
     local minBtn = UI.circleBtn({ d = 22, icon = "−", bg = C.dark1, iconColor = C.sub, hover = C.itemH }, topBar); minBtn.Position = UDim2.new(1,-48,0.5,-11); UI.pressFeedback(minBtn)
     local closeBtn = UI.circleBtn({ d = 22, icon = "×", bg = C.dark1, iconColor = C.red, hover = C.dimred }, topBar); closeBtn.Position = UDim2.new(1,-22,0.5,-11); UI.pressFeedback(closeBtn)
 
-    -- Content Split Container
     local split = Instance.new("Frame", win); split.Size = UDim2.new(1,0,0,180); split.BackgroundTransparency = 1; split.LayoutOrder = 1
     UI.listLayout(split, Enum.FillDirection.Horizontal, 12, nil, Enum.HorizontalAlignment.Left)
 
-    -- Left Column (Status & Controls)
     local leftCol = Instance.new("Frame", split); leftCol.Size = UDim2.new(0, 160, 1, 0); leftCol.BackgroundColor3 = C.dark1; UI.corner(12, leftCol); UI.stroke(C.bdr2, 1, leftCol); UI.pad(10,10,10,10, leftCol)
     UI.listLayout(leftCol, Enum.FillDirection.Vertical, 12, nil, Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Center)
 
-    -- Status Header
     local statusWrap = Instance.new("Frame", leftCol); statusWrap.Size = UDim2.new(1,0,0,20); statusWrap.BackgroundTransparency = 1
     UI.listLayout(statusWrap, Enum.FillDirection.Horizontal, 6, nil, Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Center)
     local statusDot = Instance.new("Frame", statusWrap); statusDot.Size = UDim2.new(0,10,0,10); statusDot.BackgroundColor3 = C.sub; UI.round(statusDot); UI.stroke(C.dark2, 2, statusDot); State.statusDot = statusDot
     local statusLbl = UI.label({ Text = "STOPPED", Font = Enum.Font.GothamBlack, TextSize = 12, TextColor3 = C.sub, Size = UDim2.new(0,65,1,0) }, statusWrap); State.statusLbl = statusLbl
 
-    -- Farm Button
     local farmBtn = Instance.new("TextButton", leftCol); farmBtn.Size = UDim2.new(0,72,0,72); farmBtn.BackgroundColor3 = C.dimred; farmBtn.Text = "▶"; farmBtn.Font = Enum.Font.GothamBlack; farmBtn.TextSize = 28; farmBtn.TextColor3 = C.red; farmBtn.AutoButtonColor = false; UI.round(farmBtn); local farmStroke = UI.stroke(C.red, 2, farmBtn); farmStroke.Transparency = 0.2; local farmStopPulse = nil; State.startBtn = farmBtn; UI.pressFeedback(farmBtn)
     
-    -- Warning Block
     local warnBox = Instance.new("Frame", leftCol); warnBox.Size = UDim2.new(1,0,0,40); warnBox.BackgroundColor3 = Color3.fromRGB(30, 20, 15); UI.corner(8, warnBox); UI.stroke(C.orange, 1, warnBox).Transparency = 0.6; UI.pad(4,4,4,4, warnBox)
     UI.label({ Text = "⚠️ AUTO SKILL:\nPut your damage skill in SLOT 1.", Font = Enum.Font.GothamBold, TextSize = 9, TextColor3 = C.orange, Size = UDim2.new(1,0,1,0), AlignX = Enum.TextXAlignment.Center, Wrap = true }, warnBox)
 
-    -- Right Column (Settings)
     local rightCol = Instance.new("Frame", split); rightCol.Size = UDim2.new(1, -172, 1, 0); rightCol.BackgroundColor3 = C.dark1; UI.corner(12, rightCol); UI.stroke(C.bdr2, 1, rightCol); UI.pad(12,12,12,12, rightCol)
     UI.listLayout(rightCol, Enum.FillDirection.Vertical, 14, nil, Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Center)
 
     local function createSliderRow(icon, title, suffix, vals, def, onChangeFunc)
         local row = Instance.new("Frame", rightCol); row.Size = UDim2.new(1, 0, 0, 34); row.BackgroundTransparency = 1
-        
         local textContainer = Instance.new("Frame", row); textContainer.Size = UDim2.new(0.6, 0, 1, 0); textContainer.BackgroundTransparency = 1
         UI.listLayout(textContainer, Enum.FillDirection.Horizontal, 6, nil, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Center)
         UI.label({ Text = icon, Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = C.sub, Size = UDim2.new(0,20,1,0) }, textContainer)
@@ -955,7 +825,6 @@ local function BuildUI()
         
         local sliderWrap = Instance.new("Frame", controlContainer); sliderWrap.Size = UDim2.new(1, -38, 1, 0); sliderWrap.BackgroundTransparency = 1
         UI.miniSliderSnap(sliderWrap, { snapValues = vals, default = def, suffix = suffix, valueLabel = valL, onChange = onChangeFunc })
-        
         return row
     end
 
@@ -963,7 +832,6 @@ local function BuildUI()
     createSliderRow("📏", "DISTANCE FINDER", "m", {30, 50, 90}, State.huntRange, function(v) State.huntRange = v; Persist.save() end)
     createSliderRow("🎯", "CATCH SCREEN KEY", "s", {1, 2, 3}, 1, function(v) State.catchInterval = v end)
 
-    -- Catch Key Row
     local catchRow = Instance.new("Frame", rightCol); catchRow.Size = UDim2.new(1,0,0,30); catchRow.BackgroundColor3 = Color3.fromRGB(20,28,40); UI.corner(8, catchRow); UI.pad(4,8,4,8, catchRow)
     UI.listLayout(catchRow, Enum.FillDirection.Horizontal, 8, nil, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Center)
     UI.label({ Text = "CATCH ACTION:", Font = Enum.Font.GothamBold, TextSize = 10, TextColor3 = C.sub, Size = UDim2.new(1,-110,1,0) }, catchRow)
@@ -974,7 +842,6 @@ local function BuildUI()
     local btnC = Instance.new("TextButton", toggleGroup); btnC.Size = UDim2.new(0,32,1,0); btnC.Font = Enum.Font.GothamBlack; btnC.TextSize = 12; btnC.Text = "C"; UI.corner(6, btnC); btnC.AutoButtonColor = false
     local btnOFF = Instance.new("TextButton", toggleGroup); btnOFF.Size = UDim2.new(0,38,1,0); btnOFF.Font = Enum.Font.GothamBlack; btnOFF.TextSize = 10; btnOFF.Text = "OFF"; UI.corner(6, btnOFF); btnOFF.AutoButtonColor = false
     
-    -- Minimized UI
     local minWin = Instance.new("Frame", sc)
     minWin.Size = UDim2.new(0, 310, 0, 50); minWin.Position = UDim2.new(0.5, 0, 0.5, 0); minWin.AnchorPoint = Vector2.new(0.5, 0.5); minWin.BackgroundTransparency = 1; minWin.Visible = false
     UI.listLayout(minWin, Enum.FillDirection.Horizontal, 10, Enum.SortOrder.LayoutOrder, Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Center)
@@ -982,42 +849,22 @@ local function BuildUI()
     local minNameBtn = Instance.new("TextButton", minWin); minNameBtn.Size = UDim2.new(0, 140, 0, 44); minNameBtn.BackgroundColor3 = C.dark1; UI.corner(22, minNameBtn)
     local minStroke = UI.stroke(C.neonBlue, 1.5, minNameBtn); minStroke.Transparency = 0.2; UI.pulse({minStroke}, 0.2, 0.6, 1.5, "Transparency")
     minNameBtn.Text = "NXHUB EVOMON"; minNameBtn.Font = Enum.Font.GothamBlack; minNameBtn.TextSize = 12; minNameBtn.TextColor3 = C.neonBlue; minNameBtn.AutoButtonColor = false
-    
     makeDraggable(minNameBtn, minWin)
 
     local minFarmBtn = UI.circleBtn({d=44, icon="▶", bg=C.dimred, iconColor=C.red}, minWin)
     local minCatchBtn = UI.circleBtn({d=44, icon="E", bg=C.item, iconColor=C.accent}, minWin)
 
-    -- ── FPS Boost button (à direita do Catch) ──────────────────
-    local minFpsBtn = UI.circleBtn({
-        d = 44,
-        icon = "FPS",
-        bg = C.fpsOff,
-        iconColor = C.sub,
-        textSize = 11,
-        border = C.bdr2,
-    }, minWin)
+    local minFpsBtn = UI.circleBtn({ d = 44, icon = "FPS", bg = C.fpsOff, iconColor = C.sub, textSize = 11, border = C.bdr2, }, minWin)
     minFpsBtn.TextSize = 11
 
     local function updateFpsUI()
-        if State.fpsBoostOn then
-            minFpsBtn.BackgroundColor3 = C.fpsOn
-            minFpsBtn.TextColor3 = C.green
-            minFpsBtn.Text = "FPS ON"
-        else
-            minFpsBtn.BackgroundColor3 = C.fpsOff
-            minFpsBtn.TextColor3 = C.red
-            minFpsBtn.Text = "FPS OFF"
-        end
+        if State.fpsBoostOn then minFpsBtn.BackgroundColor3 = C.fpsOn; minFpsBtn.TextColor3 = C.green; minFpsBtn.Text = "FPS ON"
+        else minFpsBtn.BackgroundColor3 = C.fpsOff; minFpsBtn.TextColor3 = C.red; minFpsBtn.Text = "FPS OFF" end
     end
     updateFpsUI()
 
-    minFpsBtn.MouseButton1Click:Connect(function()
-        FpsBoost.toggle()
-        updateFpsUI()
-    end)
+    minFpsBtn.MouseButton1Click:Connect(function() FpsBoost.toggle(); updateFpsUI() end)
     
-    -- Syncs & Logic for Catch Toggles
     local function updateCatchUI()
         local k = State.catchKey
         btnE.BackgroundColor3 = (k == "E") and C.accent or C.dark2; btnE.TextColor3 = (k == "E") and C.white or C.sub
@@ -1025,72 +872,45 @@ local function BuildUI()
         btnOFF.BackgroundColor3 = (k == "OFF") and C.dimred or C.dark2; btnOFF.TextColor3 = (k == "OFF") and C.red or C.sub
         
         minCatchBtn.Text = k
-        if k == "OFF" then
-            minCatchBtn.BackgroundColor3 = C.dimred; minCatchBtn.TextColor3 = C.red
-            minCatchBtn.TextSize = 12
-        elseif k == "E" then
-            minCatchBtn.BackgroundColor3 = C.item; minCatchBtn.TextColor3 = C.accent
-            minCatchBtn.TextSize = 16
-        else
-            minCatchBtn.BackgroundColor3 = C.item; minCatchBtn.TextColor3 = C.white
-            minCatchBtn.TextSize = 16
-        end
+        if k == "OFF" then minCatchBtn.BackgroundColor3 = C.dimred; minCatchBtn.TextColor3 = C.red; minCatchBtn.TextSize = 12
+        elseif k == "E" then minCatchBtn.BackgroundColor3 = C.item; minCatchBtn.TextColor3 = C.accent; minCatchBtn.TextSize = 16
+        else minCatchBtn.BackgroundColor3 = C.item; minCatchBtn.TextColor3 = C.white; minCatchBtn.TextSize = 16 end
     end
     
     btnE.MouseButton1Click:Connect(function() State.catchKey = "E"; updateCatchUI() end)
     btnC.MouseButton1Click:Connect(function() State.catchKey = "C"; updateCatchUI() end)
     btnOFF.MouseButton1Click:Connect(function() State.catchKey = "OFF"; updateCatchUI() end)
-    
     minCatchBtn.MouseButton1Click:Connect(function() 
-        if State.catchKey == "E" then State.catchKey = "C"
-        elseif State.catchKey == "C" then State.catchKey = "OFF"
-        else State.catchKey = "E" end
+        if State.catchKey == "E" then State.catchKey = "C" elseif State.catchKey == "C" then State.catchKey = "OFF" else State.catchKey = "E" end
         updateCatchUI() 
     end)
-    
     updateCatchUI()
 
     local setFarmOn
     local function syncFarmGlow()
         local col = State.farmOn and C.green or C.red; local th = State.farmOn and 2.5 or 2.0
         farmStroke.Color = col; farmStroke.Thickness = th
-        
         farmBtn.BackgroundColor3 = State.farmOn and C.dimgrn or C.dimred
-        farmBtn.TextColor3 = col
-        farmBtn.Text = State.farmOn and "■" or "▶"
-        
+        farmBtn.TextColor3 = col; farmBtn.Text = State.farmOn and "■" or "▶"
         minFarmBtn.BackgroundColor3 = State.farmOn and C.dimgrn or C.dimred
-        minFarmBtn.TextColor3 = col
-        minFarmBtn.Text = State.farmOn and "■" or "▶"
-
+        minFarmBtn.TextColor3 = col; minFarmBtn.Text = State.farmOn and "■" or "▶"
         if farmStopPulse then farmStopPulse(); farmStopPulse = nil end
         if State.farmOn then farmStopPulse = UI.pulse({ farmStroke }, 0.05, 0.5, 0.85, "Transparency") else farmStroke.Transparency = 0.2 end
     end
 
     setFarmOn = function(on)
         if on then
-            if not MobHunt.getClosestInRange() then 
-                UI.notify("No mobs found within " .. State.huntRange .. "m range!", true)
-                return 
-            end
-            State.farmOn = true
-            State.battleDetection = true; State.speedOn = true; State.walkSpeed = 60; State.zoomOn = true; Zoom.apply(State.zoomValue)
-            Battle._updateStatus()
-            syncFarmGlow()
-            Battle.startMonitor()
-            MobHunt.start()
+            if not MobHunt.getClosestInRange() then UI.notify("No mobs found within " .. State.huntRange .. "m range!", true); return end
+            State.farmOn = true; State.battleDetection = true; State.speedOn = true; State.walkSpeed = 60; State.zoomOn = true; Zoom.apply(State.zoomValue)
+            Battle._updateStatus(); syncFarmGlow(); Battle.startMonitor(); MobHunt.start()
         else
-            State.farmOn = false
-            State.battleDetection = false; State.speedOn = false; State.zoomOn = false; Zoom.setEnabled(false)
-            MobHunt.stop()
-            Battle.stopMonitor()
-            syncFarmGlow()
+            State.farmOn = false; State.battleDetection = false; State.speedOn = false; State.zoomOn = false; Zoom.setEnabled(false)
+            MobHunt.stop(); Battle.stopMonitor(); syncFarmGlow()
         end
     end
 
     farmBtn.MouseButton1Click:Connect(function() setFarmOn(not State.farmOn) end)
     minFarmBtn.MouseButton1Click:Connect(function() setFarmOn(not State.farmOn) end)
-    
     local f1Conn = Svc.Input.InputBegan:Connect(function(inp, processed) if not processed and inp.UserInputType == Enum.UserInputType.Keyboard and inp.KeyCode == Enum.KeyCode.F1 then setFarmOn(not State.farmOn) end end)
 
     minBtn.MouseButton1Click:Connect(function() win.Visible = false; minWin.Visible = true end)
@@ -1098,20 +918,12 @@ local function BuildUI()
 
     local function fullCleanup()
         if _G.NexusAntiAfkTask then pcall(task.cancel, _G.NexusAntiAfkTask); _G.NexusAntiAfkTask = nil end
-        f1Conn:Disconnect()
-        MobHunt.stop()
-        Input.releaseAll()
-        Battle.stopMonitor()
-        Zoom.setEnabled(false)
-        -- Restaura FPS Boost se estiver ativo
-        if State.fpsBoostOn then
-            FpsBoost.restore()
-        end
+        f1Conn:Disconnect(); MobHunt.stop(); Input.releaseAll(); Battle.stopMonitor(); Zoom.setEnabled(false)
+        if State.fpsBoostOn then FpsBoost.restore() end
         _G.NexusRoutesActive = nil
     end
 
     closeBtn.MouseButton1Click:Connect(function() fullCleanup(); UI.tween(win, 0.2, { BackgroundTransparency = 1 }); task.wait(0.22); sc:Destroy() end)
-
     _G.NexusRoutesActive = fullCleanup; return sc
 end
 
