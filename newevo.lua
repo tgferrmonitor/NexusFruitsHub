@@ -271,7 +271,19 @@ function Input.holdKey(key, active)
     elseif not active and State._keysActive[key] then pcall(function() VIM:SendKeyEvent(false, kcode, false, game) end); State._keysActive[key] = false end
     return true
 end
-function Input.releaseAll() for key in pairs(State._keysActive) do Input.holdKey(key, false) end end
+
+-- ====================================================================
+-- FIX: GARANTINDO QUE TODAS AS TECLAS SEJAM SOLTAS
+-- ====================================================================
+function Input.releaseAll() 
+    for key in pairs(State._keysActive) do Input.holdKey(key, false) end 
+    -- Garante que as teclas de batalha/catch não fiquem presas se a task for cancelada
+    if VIM then
+        pcall(function() VIM:SendKeyEvent(false, Enum.KeyCode.One, false, game) end)
+        pcall(function() VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game) end)
+        pcall(function() VIM:SendKeyEvent(false, Enum.KeyCode.C, false, game) end)
+    end
+end
 
 local Zoom = {}
 local _zoomConn = nil
@@ -308,14 +320,12 @@ function FpsBoost.apply()
 
     local isMobile = Svc.Input.TouchEnabled
     
-    -- No PC, o setfpscap funciona lindo. No celular, usamos configurações do OS para não bugar.
     if not isMobile then
         pcall(function() if setfpscap then setfpscap(5) end end)
     end
 
     local pgui = LP:WaitForChild("PlayerGui")
     
-    -- 1. TELA PRETA PURA + CONTADORES
     if not FpsBoost.blackScreen then
         local bs = Instance.new("ScreenGui")
         bs.Name = "NexusBlackScreen"
@@ -366,11 +376,9 @@ function FpsBoost.apply()
         end)
     end
 
-    -- 2. UI KILLER (Agora desativa TouchGui e CoreGuis também)
     pcall(function() Svc.StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end)
     
     local function handleGui(gui)
-        -- Trata UIs normais e a TouchGui nativa de celular (joystick pesa na CPU)
         if (gui:IsA("ScreenGui") or gui.Name == "TouchGui") and gui.Name ~= "NexusRoutes" and gui.Name ~= "NexusBlackScreen" then
             local n = string.lower(gui.Name)
             local isEssential = string.find(n, "battle") or string.find(n, "fight") or string.find(n, "combat") or string.find(n, "catch")
@@ -395,11 +403,9 @@ function FpsBoost.apply()
         end
     end)
 
-    -- 3. DESLIGA RENDER 3D DO ROBLOX DIRETAMENTE
     pcall(function() Svc.Run:Set3dRenderingEnabled(false) end)
     pcall(function() Svc.Run:set3dRenderingEnabled(false) end)
 
-    -- 4. REMOVE ILUMINAÇÃO GLOBAL PARA SEGURANÇA
     local g = game; local l = g.Lighting; local t = g.Workspace.Terrain
 
     FpsBoost.globalOrig = {
@@ -532,7 +538,14 @@ function Battle.startSkillLoop()
         end
     end)
 end
-function Battle.stopSkillLoop() if State._skillTask then task.cancel(State._skillTask); State._skillTask = nil end end
+
+-- ====================================================================
+-- FIX: FORÇAR A LIBERAÇÃO DA TECLA "1" AO CANCELAR O LOOP
+-- ====================================================================
+function Battle.stopSkillLoop() 
+    if State._skillTask then task.cancel(State._skillTask); State._skillTask = nil end 
+    if VIM then pcall(function() VIM:SendKeyEvent(false, Enum.KeyCode.One, false, game) end) end
+end
 
 function Battle.startCatchLoop()
     if State._catchTask then task.cancel(State._catchTask); State._catchTask = nil end
@@ -546,7 +559,17 @@ function Battle.startCatchLoop()
         end
     end)
 end
-function Battle.stopCatchLoop() if State._catchTask then task.cancel(State._catchTask); State._catchTask = nil end end
+
+-- ====================================================================
+-- FIX: FORÇAR A LIBERAÇÃO DAS TECLAS DE CATCH AO CANCELAR O LOOP
+-- ====================================================================
+function Battle.stopCatchLoop() 
+    if State._catchTask then task.cancel(State._catchTask); State._catchTask = nil end 
+    if VIM then 
+        pcall(function() VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game) end)
+        pcall(function() VIM:SendKeyEvent(false, Enum.KeyCode.C, false, game) end)
+    end
+end
 
 function Battle._updateStatus()
     if not State.statusLbl then return end
@@ -584,6 +607,16 @@ function Battle.startMonitor()
             
             if nowCatch and not State.inCatch then 
                 State.inCatch = true
+                
+                -- ====================================================================
+                -- FIX 1: ASSIM QUE ENTRAR NO CATCH, DESLIGA O ATAQUE (1) IMEDIATAMENTE
+                -- ====================================================================
+                if State.inBattle then
+                    State.inBattle = false
+                    Battle.stopSkillLoop()
+                    Input.releaseAll()
+                end
+                
                 if State.catchKey == "E" then
                     State.evomonsCaught = State.evomonsCaught + 1
                 elseif State.catchKey == "C" then
@@ -591,14 +624,30 @@ function Battle.startMonitor()
                 end
                 
                 Battle.startCatchLoop(); Battle._updateStatus()
+                
             elseif not nowCatch and State.inCatch then 
-                State.inCatch = false; Battle.stopCatchLoop(); Battle._updateStatus()
+                State.inCatch = false; 
+                Battle.stopCatchLoop(); 
+                
+                -- ====================================================================
+                -- FIX 2: AO SAIR DO CATCH, FORÇA O STATUS ACTIVE (ANDAR) E CANCELA BATTLE
+                -- ====================================================================
+                State.inBattle = false
+                Battle.stopSkillLoop()
+                Input.releaseAll()
+                Battle._updateStatus()
+                
+                -- Dá o tempo obrigatório de 5 segundos andando ANTES de ler qualquer batalha
+                task.wait(5)
             end
             
             if not State.battleDetection then
                 if State.inBattle then State.inBattle = false; Battle.stopSkillLoop(); Input.releaseAll(); Battle._updateStatus() end
                 continue
             end
+            
+            -- FIX 3: Se estiver na tela de Catching, pula a verificação de Batalha!
+            if State.inCatch then continue end
             
             local nowInBattle = Battle.detect()
             if nowInBattle and not State.inBattle then
