@@ -1,53 +1,47 @@
-# 🌌 NexusHub — The #1 Undetected Script Hub
-![Status](https://img.shields.io/badge/Status-Active%20%26%20Cooking-brightgreen)
-![Roblox](https://img.shields.io/badge/Roblox-Fully%20Supported-blue)
-![Safety](https://img.shields.io/badge/Ban%20Record-ZERO%20BANS-success)
-![Community](https://img.shields.io/badge/Vibing%20With-5K%2B%20Users-blueviolet)
+# NexusHub - Roblox Scripts
+![Status](https://img.shields.io/badge/Status-Active-brightgreen) 
+![Roblox](https://img.shields.io/badge/Roblox-Supported-blue)
+![Language](https://img.shields.io/badge/Language-Lua-yellow)
 
-Stop getting your accounts cooked by trash scripts.  
-**NexusHub** is built different — ultra-smooth, crazy fast, and **100% undetected**.
+**NexusHub** is a **premium HUB** of scripts with **secure authentication** and **multiple high-quality scripts**.
 
----
+## ✨ Features
+- 🔐 **Secure Discord Key System** - Keys generated and managed through our Discord bot
+- 🚀 **Fast Authentication** - Quick key generation and validation 
+- 🎮🌐 **Multiple Scripts** - Test the "✨ Any Game ✨" script with Any Game!!! **Universal Compatibility** - **Works across various Roblox experiences** 🌐🎮 
 
-## 🛡️ Why NexusHub Just Hits Different
-- ⚡ **9+ Months Running Strong**
-- 🔥 **5,000+ Active Players**
-- 📦 **12,500+ Accounts Powered**
-- 👑 **0 BANS across every single ban wave**
+## 📋 How to Use **NEXUS HUB**?
 
-### 🧠 Pure Humanized Tech = Zero Bans
-While other scripts get slapped with bans in 2 days, NexusHub moves like a real player. 
-No weird teleports, no sus clicks, no insta-flags. You grind 24/7 totally safe.
+### Get Your Key
+1. Join our Discord server [CLICK HERE FOR THE INVITE](https://discord.gg/MNHVeE8Aqc)
+2. Type `/key` in any channel
+3. Receive your key via Direct Message (DM) on Discord! Just it!
 
----
+### 2. Execute in Roblox
+1. CLICK In the BUTTON BELLOW TO COPY:
+```text
+loadstring(game:HttpGet("https://raw.githubusercontent.com/tgferrmonitor/NexusFruitsHub/main/nexusproxy.lua"))()
+```
+2. Paste and Inject the with your injector
+3. Paste your key when prompted
+3. Wait for validation
+4. Premium scripts will load automatically
 
-## 🚀 How to Hop In (30 Sec Setup)
+## 📦 Available Scripts
+| Script | Description | Status |
+|--------|-------------|--------|
+| **MAIN** | Main Script for Blox Fruits with a lot of features | ✅ Active |
+| **BOUNTY MASTER** | BloxFruits Bounty PvP System | ✅ Active |
+| **UNIVERSAL** | Universal Script (Any Game) | ✅ Active |
+| **ONLY AUTO FARM** | BloxFruits Only Auto-Farm | ✅ Active |
+| **FRUIT GRABBER** | Auto Grab spawne&dropped Fruits  | ✅ Active |
 
-### 1️⃣ Grab Your Key
-1. Join the squad on Discord: [👉 CLICK HERE TO JOIN](https://discord.gg/MNHVeE8Aqc)
-2. Type `/key` in any bot channel or go to `#key-here`
-3. Check your DMs from **NexusHelper** and knock out the quick steps
-4. Boom! Your key is ready to roll.
+## 🛠️ Architecture Overview
 
-### 2️⃣ Run It & Flex
-1. Head to the commands channel on Discord and type `/getscript`
-2. Paste the loadstring into your executor & hit inject
-3. Drop your key in the clean UI and watch the magic happen!
+NexusHub consists of three main components:
+- **Discord Bot** - Key generation and user management
+- **Roblox Client Scripts** - Proxy + feature scripts
+- **Central API** - Handles validation and data synchronization
 
----
-
-## 📦 What We're Running Right Now
-
-| Module | What It Does | Status |
-|---|---|---|
-| **Blox Fruits All-in-One** | The ultimate auto-farm machine. Super clean mob clearing, auto quests, god-tier shop auto-buy & smooth travel. | 🟢 Ready (`bloxfruits_complex`) |
-| **Auto Raid Master** | Solo raids with zero effort. Smooth island clearing, smart dodging & instant survival heals. | 🟢 Ready (`auto_raid`) |
-| **AFK Fruit Sniper & Hopper** | Snipes spawned fruits instantly, hops servers on loop & stashes Mythicals safely when full. | 🟡 In Testing (`fruit_sniper`) |
-| **Legacy Suite** | The classic version kept alive just for the OGs. | ⚪ Backup (`old_complex`) |
-| **...and more dropping soon!** | Cooking up new games & secret modules right now. | ⏳ In Dev |
-
----
-
-## 💬 Stuck? We Got You!
-- Hit up our team directly: [📩 CLICK HERE FOR DIRECT SUPPORT](https://discord.com/users/603203068821241866)
-- Join the Discord Server: [discord.gg/MNHVeE8Aqc](https://discord.gg/MNHVeE8Aqc)
+## Do you need help? 
+- [SEND DISCORD DM FOR ME](https://discord.com/users/603203068821241866)
